@@ -128,14 +128,14 @@ def parse_from_mongo(item: dict) -> dict:
 # Initialize default admin (username: admin, password: admin123)
 @app.on_event("startup")
 async def create_default_admin():
-    # Read desired admin credentials from env vars (fallback to secure defaults if missing)
-    new_admin_username = os.environ.get("ADMIN_USERNAME", None)
-    new_admin_password = os.environ.get("ADMIN_PASSWORD", None)
+    # Read desired admin credentials from env vars and fallback to defaults for local/dev usage.
+    new_admin_username = os.environ.get("ADMIN_USERNAME") or "admin"
+    new_admin_password = os.environ.get("ADMIN_PASSWORD") or "admin123"
 
-    if not new_admin_username or not new_admin_password:
-        # if env not provided, do not auto-create an insecure default — log warning and return
-        logger.warning("ADMIN_USERNAME or ADMIN_PASSWORD not set. Skipping default admin creation.")
-        return
+    if not os.environ.get("ADMIN_USERNAME") or not os.environ.get("ADMIN_PASSWORD"):
+        logger.warning(
+            "ADMIN_USERNAME or ADMIN_PASSWORD not set. Falling back to development defaults."
+        )
 
     existing_admin = await db.admins.find_one({"username": new_admin_username})
     if not existing_admin:
@@ -154,9 +154,7 @@ async def create_default_admin():
 async def get_all_products():
     """Get all products for customer view"""
     products = await db.products.find({}, {"_id": 0}).to_list(1000)
-    for product in products:
-        product = parse_from_mongo(product)
-    return products
+    return [parse_from_mongo(product) for product in products]
 
 @api_router.get("/products/{product_id}", response_model=Product)
 async def get_product(product_id: str):
@@ -193,9 +191,7 @@ async def verify_admin_token(username: str = Depends(verify_token)):
 async def get_admin_products(username: str = Depends(verify_token)):
     """Get all products for admin view"""
     products = await db.products.find({}, {"_id": 0}).to_list(1000)
-    for product in products:
-        product = parse_from_mongo(product)
-    return products
+    return [parse_from_mongo(product) for product in products]
 
 @api_router.post("/admin/products", response_model=Product)
 async def create_product(product_data: ProductCreate, username: str = Depends(verify_token)):
